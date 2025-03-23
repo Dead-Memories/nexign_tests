@@ -1,33 +1,59 @@
-import com.codeborne.selenide.Configuration;
-import org.junit.jupiter.api.BeforeAll;
+import com.codeborne.selenide.ElementsCollection;
 import org.junit.jupiter.api.Test;
+import org.languagetool.JLanguageTool;
+import org.languagetool.language.Russian;
+import org.languagetool.rules.RuleMatch;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-import static com.codeborne.selenide.Selenide.$;
-import static com.codeborne.selenide.Selenide.open;
+import static com.codeborne.selenide.Selenide.*;
 
 public class Task3 {
 
-    @BeforeAll
-    public static void setup() {
-        Configuration.browserSize = "1920x1080";
-    }
-
     @Test
-    public void countNexignMentions() {
+    public void checkSpellingOnMainAndSubPages() throws IOException {
+
         open("https://nexign.com/ru");
 
-        String pageText = $("body").getText();
+        ElementsCollection links = $$("a[href^='https://nexign.com/ru']");
 
-        Pattern pattern = Pattern.compile("\\bNexign\\b", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(pageText);
-        int count = 0;
-        while (matcher.find()) {
-            count++;
+        Set<String> urls = new HashSet<>();
+        urls.add("https://nexign.com/ru"); // главная страница
+
+        urls.addAll(
+                links.stream()
+                        .map(el -> el.attr("href"))
+                        .filter(href -> href != null && !href.contains("#"))
+                        .limit(5)
+                        .collect(Collectors.toSet())
+        );
+
+        System.out.println("\n Ссылки для проверки:");
+        urls.forEach(System.out::println);
+
+        JLanguageTool langTool = new JLanguageTool(new Russian());
+
+        for (String url : urls) {
+            open(url);
+            String text = $("body").getText();
+
+            List<RuleMatch> matches = langTool.check(text);
+            System.out.println("\n Проверка страницы: " + url);
+            if (matches.isEmpty()) {
+                System.out.println("Ошибок не найдено.");
+            } else {
+                for (RuleMatch match : matches) {
+                    String errorFragment = text.substring(match.getFromPos(), match.getToPos());
+                    System.out.println("Ошибка: " + errorFragment);
+                    System.out.println("Подсказка: " + match.getMessage());
+                    System.out.println("Предложения: " + match.getSuggestedReplacements());
+                }
+            }
+            System.out.println("--------------------------------------------------");
         }
-
-        System.out.println("Количество упоминаний слова 'Nexign': " + count);
     }
 }
